@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import os
 import time
 
@@ -26,3 +26,11 @@ def cpu_spike():
     while (time.time() - start < 30):
         pass
     return {"message":"CPU spike completed"}
+
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    print("alert received")
+    print(data)
+    return {"status":"received"}

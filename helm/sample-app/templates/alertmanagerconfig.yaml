@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: ai-agent-webhook
+  labels:
+    release: monitoring
+spec:
+  route:
+    receiver: 'ai-agent'
+    groupBy: ['alertname']
+    groupWait: 5s
+    groupInterval: 1m
+    repeatInterval: 1h
+  receivers:
+    - name: 'ai-agent'
+      webhookConfigs:
+        - url: 'http://ai-agent.app.svc.cluster.local:8000/webhook'
+          sendResolved: false

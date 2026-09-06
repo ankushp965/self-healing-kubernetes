@@ -1,33 +1,101 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
-    push:
-        branches:
-            - main
-    pull_request:
-    
+  push:
+    branches:
+      - main
+  pull_request:
+
 permissions:
-    contents: read
-    packages: write
+  contents: read
+  packages: write
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        steps:
-            - name: Checkout-code
-              uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest httpx fastapi uvicorn
 
-            - name: Login to GHCR
-              uses: docker/login-action@v3
-              with:
-                registry: ghcr.io
-                username: ${{ github.actor }}
-                password: ${{ secrets.GITHUB_TOKEN}}
+      - name: Run Linting (Flake8)
+        run: |
+          flake8 app/ agent/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app/ agent/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-            - name: Build and Push Docker image 
-              uses: docker/build-push-action@v5
-              with: 
-                context: ./app
-                push: true
-                tags: ghcr.io/${{ github.repository}}:${{github.sha}}
+      - name: Run Tests (Pytest)
+        run: |
+          cd app
+          pytest test_main.py
+
+  build:
+    name: Build & Push Images
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - context: ./app
+            image_name: self-healing-kubernetes
+          - context: ./agent
+            image_name: ai-agent
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:${{ github.sha }},ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}:latest
+
+  deploy:
+    name: Deploy to AWS EKS
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --name ai-agent-cluster --region ap-south-1
+
+      - name: Deploy Sample App via Helm
+        run: |
+          helm upgrade --install sample-app ./helm/sample-app \
+            -n app \
+            --set image.tag=${{ github.sha }}
+
+      - name: Deploy AI Agent via Helm
+        run: |
+          helm upgrade --install ai-agent ./helm/ai-agent \
+            -n app \
+            --set image.tag=${{ github.sha }}

@@ -1,0 +1,9 @@
+image:
+  repository: ai-agent
+  tag: latest 
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8000
+  
+openaiApiKey:  "your-api-key-here"  

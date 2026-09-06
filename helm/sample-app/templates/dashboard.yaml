@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-self-healing-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  ai-overview.json: |
+    {
+      "title": "AI Self-Healing Overview",
+      "timezone": "browser",
+      "refresh": "5s",
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Total Pod Restarts (app)",
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+          "targets": [{"expr": "sum(kube_pod_container_status_restarts_total{namespace=\"app\"})"}],
+          "datasource": "Prometheus"
+        },
+        {
+          "type": "stat",
+          "title": "Active Troubleshooting Alerts",
+          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+          "targets": [{"expr": "count(ALERTS{namespace=\"app\", alertstate=\"firing\"}) or vector(0)"}],
+          "datasource": "Prometheus"
+        },
+        {
+          "type": "stat",
+          "title": "Unhealthy Pods",
+          "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+          "targets": [{"expr": "sum(kube_pod_status_phase{namespace=\"app\", phase=~\"Failed|Unknown|Pending\"}) or vector(0)"}],
+          "datasource": "Prometheus"
+        },
+        {
+          "type": "timeseries",
+          "title": "Restarts Over Time",
+          "gridPos": {"h": 12, "w": 24, "x": 0, "y": 6},
+          "targets": [{"expr": "sum by(pod) (kube_pod_container_status_restarts_total{namespace=\"app\"})", "legendFormat": "{{`{{pod}}`}}"}],
+          "datasource": "Prometheus"
+        }
+      ]
+    }

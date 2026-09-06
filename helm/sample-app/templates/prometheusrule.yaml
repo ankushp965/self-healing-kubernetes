@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sample-app-alerts
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: sample-app
+      rules:
+        # Purana CrashLoop Rule
+        - alert: SampleAppCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="app"}[1m]) > 0
+          for: 5s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Sample app is crash looping"
+            description: "A sample-app container has entered CrashLoopBackOff."
+
+        # Naya Rule: Image Pull Error (Galat image name)
+        - alert: PodImagePullError
+          expr: |
+            kube_pod_container_status_waiting_reason{reason=~"ImagePullBackOff|ErrImagePull", namespace="app"} > 0
+          for: 5s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod Image Pull Error"
+            description: "A pod is failing to pull its image."
+
+        # Naya Rule: Memory Exhaustion (OOMKilled)
+        - alert: PodOOMKilled
+          expr: |
+            kube_pod_container_status_terminated_reason{reason="OOMKilled", namespace="app"} > 0
+          for: 5s
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod OOMKilled"
+            description: "A pod was killed due to Out Of Memory."
